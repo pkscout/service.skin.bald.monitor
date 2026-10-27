@@ -9,10 +9,9 @@ class UpdateMonitor(xbmc.Monitor):
     def __init__(self):
         super().__init__()
         
-        addon = xbmcaddon.Addon()
-        # Use xbmcvfs.translatePath instead of xbmc.translatePath
-        addon_path = xbmcvfs.translatePath(addon.getAddonInfo('path'))
-        addons_dir = os.path.dirname(addon_path)
+        self.addon = xbmcaddon.Addon()
+        addon_path = xbmcvfs.translatePath(self.addon.getAddonInfo('path'))
+        addons_dir = os.path.dirname(os.path.dirname(addon_path))
         
         self.src = os.path.join(addon_path, "resources", "Custom.xml")
         self.colors_dir = os.path.join(addons_dir, "skin.bald", "colors")
@@ -26,20 +25,18 @@ class UpdateMonitor(xbmc.Monitor):
         })
 
     def onNotification(self, sender, method, data):
-        if method in ['System.OnAddonUpdate', 'System.OnAddonInstalled']:
-            try:
-                payload = json.loads(data)
-                if payload.get('id') == 'skin.bald':
-                    xbmc.log(f"service.skin.bald.monitor: Detected {method} for skin.bald", xbmc.LOGDEBUG)
+        if method == 'GUI.OnSkinLoaded':
+            current_skin = xbmc.getSkinDir()
+            
+            if current_skin == 'skin.bald':
+                # If the file is missing, the skin was just installed or updated!
+                if os.path.exists(self.src) and os.path.exists(self.colors_dir) and not os.path.exists(self.dest):
+                    xbmc.log("service.skin.bald.monitor: Custom.xml missing, copying now...", xbmc.LOGDEBUG)
                     
-                    if os.path.exists(self.src) and os.path.exists(self.colors_dir):
-                        shutil.copy2(self.src, self.dest)
-                        xbmc.log("service.skin.bald.monitor: Copied Custom.xml successfully", xbmc.LOGDEBUG)
+                    shutil.copy2(self.src, self.dest)
                     
                     xbmc.executeJSONRPC(self.json_command)
-                    
-            except Exception as e:
-                xbmc.log(f"service.skin.bald.monitor Error: {e}", xbmc.LOGERROR)
+                    xbmc.executebuiltin('ReloadSkin()')
 
 if __name__ == '__main__':
     monitor = UpdateMonitor()
